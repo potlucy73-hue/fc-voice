@@ -12,9 +12,9 @@ jobs:
       - name: Configure Core RDP Settings
         shell: pwsh
         run: |
-          Set-ItemProperty -Path 'HKLM:SystemCurrentControlSetControlTerminal Server' -Name 'fDenyTSConnections' -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:SystemCurrentControlSetControlTerminal ServerWinStationsRDP-Tcp' -Name 'UserAuthentication' -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:SystemCurrentControlSetControlTerminal ServerWinStationsRDP-Tcp' -Name 'SecurityLayer' -Value 0 -Force
+          Set-ItemProperty -Path "HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server" -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path "HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path "HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -Name "SecurityLayer" -Value 0 -Force
           try { netsh advfirewall firewall delete rule name="RDP-Tailscale" } catch {}
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
           Restart-Service -Name TermService -Force
@@ -39,7 +39,6 @@ jobs:
           New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires -ErrorAction SilentlyContinue
           Add-LocalGroupMember -Group "Administrators" -Member "RDP" -ErrorAction SilentlyContinue
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP" -ErrorAction SilentlyContinue
-          $env:RDP_PASSWORD = $password
           echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
           if (-not (Get-LocalUser -Name "RDP" -ErrorAction SilentlyContinue)) {
               Write-Error "User creation failed"
@@ -51,19 +50,19 @@ jobs:
         shell: pwsh
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi"
-          $installerPath = "$env:TEMP\tailscale.msi"
+          $installerPath = "$env:TEMP\\tailscale.msi"
           Write-Host "Downloading Tailscale..."
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath -UseBasicParsing
           Write-Host "Installing Tailscale..."
           Start-Process msiexec.exe -ArgumentList "/i","`"$installerPath`"","/quiet","/norestart" -Wait
           Start-Sleep -Seconds 10
           Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-          Write-Host "Tailscale installed successfully"
+          Write-Host "Tailscale installed"
 
       - name: Establish Tailscale Connection
         shell: pwsh
         run: |
-          $tailscalePath = "$env:ProgramFilesTailscale\tailscale.exe"
+          $tailscalePath = "$env:ProgramFiles\\Tailscale\\tailscale.exe"
           if (-not (Test-Path $tailscalePath)) {
               Write-Error "Tailscale not found"
               exit 1
@@ -76,7 +75,7 @@ jobs:
               Start-Sleep -Seconds 3
               $tsIP = & $tailscalePath ip -4
               $retries++
-              Write-Host "Waiting for IP... (attempt $retries/15)"
+              Write-Host "Waiting for IP (attempt $retries/15)"
           }
           if (-not $tsIP) {
               Write-Error "IP not assigned"
@@ -84,7 +83,7 @@ jobs:
           }
           $tsIP = $tsIP.Trim()
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-          Write-Host "Connected with IP: $tsIP"
+          Write-Host "Connected: $tsIP"
       
       - name: Verify RDP Accessibility
         shell: pwsh
@@ -95,7 +94,7 @@ jobs:
               Write-Error "RDP port test failed"
               exit 1
           }
-          Write-Host "RDP accessible"
+          Write-Host "RDP is accessible"
 
       - name: Maintain Connection
         shell: pwsh
@@ -111,7 +110,7 @@ jobs:
           Write-Host ""
           Write-Host "=========================================="
           Write-Host ""
-          Write-Host "Connection active - Cancel workflow to stop"
+          Write-Host "Connection active. Cancel workflow to stop."
           Write-Host ""
           $counter = 0
           while ($true) {
