@@ -12,9 +12,9 @@ jobs:
       - name: Configure Core RDP Settings
         shell: pwsh
         run: |
-          Set-ItemProperty -Path "HKLM:SystemCurrentControlSetControlTerminal Server" -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path "HKLM:SystemCurrentControlSetControlTerminal ServerWinStationsRDP-Tcp" -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path "HKLM:SystemCurrentControlSetControlTerminal ServerWinStationsRDP-Tcp" -Name "SecurityLayer" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:SystemCurrentControlSetControlTerminal Server' -Name 'fDenyTSConnections' -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:SystemCurrentControlSetControlTerminal ServerWinStationsRDP-Tcp' -Name 'UserAuthentication' -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:SystemCurrentControlSetControlTerminal ServerWinStationsRDP-Tcp' -Name 'SecurityLayer' -Value 0 -Force
           try { netsh advfirewall firewall delete rule name="RDP-Tailscale" } catch {}
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
           Restart-Service -Name TermService -Force
@@ -23,7 +23,6 @@ jobs:
       - name: Create RDP User with Secure Password
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Security
           $charSet = @{
               Upper   = [char[]](65..90)
               Lower   = [char[]](97..122)
@@ -51,12 +50,12 @@ jobs:
       - name: Install Tailscale
         shell: pwsh
         run: |
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi"
           $installerPath = "$env:TEMP\tailscale.msi"
           Write-Host "Downloading Tailscale..."
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath -UseBasicParsing
           Write-Host "Installing Tailscale..."
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Start-Process msiexec.exe -ArgumentList "/i","`"$installerPath`"","/quiet","/norestart" -Wait
           Start-Sleep -Seconds 10
           Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
           Write-Host "Tailscale installed successfully"
@@ -66,10 +65,10 @@ jobs:
         run: |
           $tailscalePath = "$env:ProgramFilesTailscale\tailscale.exe"
           if (-not (Test-Path $tailscalePath)) {
-              Write-Error "Tailscale executable not found at $tailscalePath"
+              Write-Error "Tailscale not found"
               exit 1
           }
-          Write-Host "Connecting to Tailscale network..."
+          Write-Host "Connecting to Tailscale..."
           & $tailscalePath up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID --accept-routes
           $tsIP = $null
           $retries = 0
@@ -77,26 +76,26 @@ jobs:
               Start-Sleep -Seconds 3
               $tsIP = & $tailscalePath ip -4
               $retries++
-              Write-Host "Waiting for Tailscale IP... (attempt $retries/15)"
+              Write-Host "Waiting for IP... (attempt $retries/15)"
           }
           if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned after 15 attempts"
+              Write-Error "IP not assigned"
               exit 1
           }
           $tsIP = $tsIP.Trim()
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-          Write-Host "Tailscale connected with IP: $tsIP"
+          Write-Host "Connected with IP: $tsIP"
       
       - name: Verify RDP Accessibility
         shell: pwsh
         run: |
-          Write-Host "Verifying RDP accessibility on Tailscale IP: $env:TAILSCALE_IP"
+          Write-Host "Verifying RDP on: $env:TAILSCALE_IP"
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389 -InformationLevel Quiet
           if (-not $testResult) {
-              Write-Error "TCP connection to RDP port 3389 failed"
+              Write-Error "RDP port test failed"
               exit 1
           }
-          Write-Host "RDP port 3389 is accessible on Tailscale network"
+          Write-Host "RDP accessible"
 
       - name: Maintain Connection
         shell: pwsh
@@ -112,13 +111,12 @@ jobs:
           Write-Host ""
           Write-Host "=========================================="
           Write-Host ""
-          Write-Host "Connection is active. Keeping workflow alive..."
-          Write-Host "Press 'Cancel workflow' button to terminate."
+          Write-Host "Connection active - Cancel workflow to stop"
           Write-Host ""
           $counter = 0
           while ($true) {
               $counter++
               $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-              Write-Host "[$timestamp] Heartbeat #$counter - RDP session active"
+              Write-Host "[$timestamp] Heartbeat #$counter"
               Start-Sleep -Seconds 300
           }
